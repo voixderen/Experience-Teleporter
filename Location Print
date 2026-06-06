@@ -9,7 +9,7 @@ local SavedLocations = {}
 local MAX_SLOTS = 21
 
 -- Pengaturan GitHub (GitHub)
-local GITHUB_TOKEN = "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"
+local GITHUB_TOKEN = "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"
 local GIST_ID = "0c732c3a34008fb6672632acfd4478b1"
 local ExperienceID = tostring(game.PlaceId)
 
