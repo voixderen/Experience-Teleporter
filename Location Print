@@ -12,9 +12,25 @@ local GITHUB_TOKEN = "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"
 local GIST_ID = "6895a3b15e85be0737d21df80e8e09e9"
 local ExperienceID = tostring(game.PlaceId)
 
-local req = (syn and syn.request) or request or http_request or (fluxus and fluxus.request)
+local req
+if type(syn) == "table" and type(syn.request) == "function" then
+	req = syn.request
+elseif type(request) == "function" then
+	req = request
+elseif type(http_request) == "function" then
+	req = http_request
+elseif type(fluxus) == "table" and type(fluxus.request) == "function" then
+	req = fluxus.request
+end
 
-local guiParent = (gethui and gethui()) or (pcall(function() return CoreGui.Name end) and CoreGui) or Player:WaitForChild("PlayerGui")
+local guiParent = Player:WaitForChild("PlayerGui")
+pcall(function()
+	if type(gethui) == "function" then
+		guiParent = gethui()
+	elseif CoreGui.Name then
+		guiParent = CoreGui
+	end
+end)
 
 if guiParent:FindFirstChild("LocationSaver") then
 	guiParent:FindFirstChild("LocationSaver"):Destroy()
@@ -215,24 +231,32 @@ local function RefreshUI()
 end
 
 local function FetchGitHubData()
-	if not req then Status.Text = "Executor (eksekutor) tidak mendukung HTTP Request (Permintaan HTTP)" return nil end
-	local response = req({
-		Url = "https://api.github.com/gists/" .. GIST_ID,
-		Method = "GET",
-		Headers = {
-			["Authorization"] = "token " .. GITHUB_TOKEN,
-			["Accept"] = "application/vnd.github.v3+json",
-			["Content-Type"] = "application/json"
-		}
-	})
+	if not req then Status.Text = "Executor (Eksekutor) tidak mendukung HTTP Request (Permintaan HTTP)" return nil end
 	
-	if response.Success then
-		local decoded = HttpService:JSONDecode(response.Body)
-		if decoded.files and decoded.files["locations.json"] then
-			return HttpService:JSONDecode(decoded.files["locations.json"].content)
+	local success, response = pcall(function()
+		return req({
+			Url = "https://api.github.com/gists/" .. GIST_ID,
+			Method = "GET",
+			Headers = {
+				["Authorization"] = "token " .. GITHUB_TOKEN,
+				["Accept"] = "application/vnd.github.v3+json",
+				["Content-Type"] = "application/json"
+			}
+		})
+	end)
+	
+	if success and response and response.Success then
+		local decodeSuccess, decoded = pcall(function() return HttpService:JSONDecode(response.Body) end)
+		if decodeSuccess and decoded.files and decoded.files["locations.json"] then
+			local contentSuccess, contentDecoded = pcall(function() return HttpService:JSONDecode(decoded.files["locations.json"].content) end)
+			if contentSuccess then
+				return contentDecoded
+			end
 		end
-	else
+	elseif response then
 		Status.Text = "Load Error (Galat Muat): " .. tostring(response.StatusCode)
+	else
+		Status.Text = "Network Error (Galat Jaringan)"
 	end
 	return {}
 end
@@ -252,35 +276,40 @@ local function LoadFromGitHub()
 end
 
 local function SaveToGitHub()
-	if not req then Status.Text = "Executor (eksekutor) tidak mendukung HTTP Request (Permintaan HTTP)" return end
+	if not req then Status.Text = "Executor (Eksekutor) tidak mendukung HTTP Request (Permintaan HTTP)" return end
 	Status.Text = "Saving (Menyimpan) ke GitHub..."
 	
 	local allData = FetchGitHubData() or {}
 	allData[ExperienceID] = SavedLocations
 	
-	local newContent = HttpService:JSONEncode(allData)
+	local encodeSuccess, newContent = pcall(function() return HttpService:JSONEncode(allData) end)
+	if not encodeSuccess then Status.Text = "Format Error (Galat Format)" return end
 	
-	local response = req({
-		Url = "https://api.github.com/gists/" .. GIST_ID,
-		Method = "PATCH",
-		Headers = {
-			["Authorization"] = "token " .. GITHUB_TOKEN,
-			["Accept"] = "application/vnd.github.v3+json",
-			["Content-Type"] = "application/json"
-		},
-		Body = HttpService:JSONEncode({
-			files = {
-				["locations.json"] = {
-					content = newContent
+	local reqSuccess, response = pcall(function()
+		return req({
+			Url = "https://api.github.com/gists/" .. GIST_ID,
+			Method = "PATCH",
+			Headers = {
+				["Authorization"] = "token " .. GITHUB_TOKEN,
+				["Accept"] = "application/vnd.github.v3+json",
+				["Content-Type"] = "application/json"
+			},
+			Body = HttpService:JSONEncode({
+				files = {
+					["locations.json"] = {
+						content = newContent
+					}
 				}
-			}
+			})
 		})
-	})
+	end)
 	
-	if response.Success then
+	if reqSuccess and response and response.Success then
 		Status.Text = "Saved data to GitHub for Experience ID (Data tersimpan di GitHub untuk Identitas Pengalaman): " .. ExperienceID
+	elseif response then
+		Status.Text = "Save Error (Galat Simpan): " .. tostring(response.StatusCode)
 	else
-		Status.Text = "Save Error (Galat Simpan): " .. tostring(response.StatusCode) .. " - " .. tostring(response.StatusMessage)
+		Status.Text = "Network Error (Galat Jaringan)"
 	end
 end
 
@@ -288,7 +317,6 @@ GHLoadBtn.MouseButton1Click:Connect(LoadFromGitHub)
 GHSaveBtn.MouseButton1Click:Connect(SaveToGitHub)
 
 for i = 1, MAX_SLOTS do
-
 	local SlotFrame = Instance.new("Frame")
 	SlotFrame.BackgroundColor3 = Color3.fromRGB(55,55,55)
 	SlotFrame.Parent = Grid
@@ -338,18 +366,9 @@ for i = 1, MAX_SLOTS do
 	}
 
 	SaveButton.MouseButton1Click:Connect(function()
-
 		SaveLocation(i)
-
 		local Pos = SavedLocations[i].Position
-
-		Coord.Text = string.format(
-			"%.0f %.0f %.0f",
-			Pos[1],
-			Pos[2],
-			Pos[3]
-		)
-
+		Coord.Text = string.format("%.0f %.0f %.0f", Pos[1], Pos[2], Pos[3])
 		SlotFrame.BackgroundColor3 = Color3.fromRGB(65,100,65)
 	end)
 
