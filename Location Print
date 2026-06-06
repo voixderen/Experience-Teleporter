@@ -10,7 +10,7 @@ local MAX_SLOTS = 21
 
 -- Pengaturan GitHub (GitHub)
 local GITHUB_TOKEN = "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"
-local GIST_ID = "0c732c3a34008fb6672632acfd4478b1"
+local GIST_ID = "6895a3b15e85be0737d21df80e8e09e9"
 local ExperienceID = tostring(game.PlaceId)
 
 local req = (syn and syn.request) or request or http_request or (fluxus and fluxus.request)
