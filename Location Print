@@ -1,0 +1,336 @@
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local HttpService = game:GetService("HttpService")
+
+local Player = Players.LocalPlayer
+
+local SavedLocations = {}
+local MAX_SLOTS = 21
+
+-- Pengaturan GitHub (GitHub)
+local GITHUB_TOKEN = "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"
+local GIST_ID = "0c732c3a34008fb6672632acfd4478b1"
+local ExperienceID = tostring(game.PlaceId)
+
+local req = (syn and syn.request) or request or http_request or (fluxus and fluxus.request)
+
+-- GUI
+local guiParent = (gethui and gethui()) or (pcall(function() return CoreGui.Name end) and CoreGui) or Player:WaitForChild("PlayerGui")
+
+if guiParent:FindFirstChild("LocationSaver") then
+	guiParent:FindFirstChild("LocationSaver"):Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "LocationSaver"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = guiParent
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 550, 0, 450)
+MainFrame.Position = UDim2.new(0.5, -275, 0.5, -225)
+MainFrame.BackgroundColor3 = Color3.fromRGB(35,35,35)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.Parent = MainFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1,0,0,35)
+Title.BackgroundTransparency = 1
+Title.Text = "Location Saver (21 Slots)"
+Title.TextColor3 = Color3.new(1,1,1)
+Title.TextScaled = true
+Title.Font = Enum.Font.GothamBold
+Title.Parent = MainFrame
+
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = UDim2.new(0, 30, 0, 30)
+CloseButton.Position = UDim2.new(1, -35, 0, 5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+CloseButton.TextColor3 = Color3.new(1,1,1)
+CloseButton.Text = "X"
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Parent = MainFrame
+
+local UICornerClose = Instance.new("UICorner")
+UICornerClose.CornerRadius = UDim.new(0, 5)
+UICornerClose.Parent = CloseButton
+
+local Status = Instance.new("TextLabel")
+Status.Size = UDim2.new(1,-10,0,25)
+Status.Position = UDim2.new(0,5,1,-30)
+Status.BackgroundTransparency = 1
+Status.TextColor3 = Color3.new(1,1,1)
+Status.Text = "Ready"
+Status.Font = Enum.Font.Gotham
+Status.TextXAlignment = Enum.TextXAlignment.Left
+Status.Parent = MainFrame
+
+local Grid = Instance.new("Frame")
+Grid.Size = UDim2.new(1,-10,1,-105)
+Grid.Position = UDim2.new(0,5,0,40)
+Grid.BackgroundTransparency = 1
+Grid.Parent = MainFrame
+
+local Layout = Instance.new("UIGridLayout")
+Layout.CellSize = UDim2.new(0,170,0,75)
+Layout.CellPadding = UDim2.new(0,5,0,5)
+Layout.Parent = Grid
+
+local GithubSyncFrame = Instance.new("Frame")
+GithubSyncFrame.Size = UDim2.new(1, -10, 0, 30)
+GithubSyncFrame.Position = UDim2.new(0, 5, 1, -65)
+GithubSyncFrame.BackgroundTransparency = 1
+GithubSyncFrame.Parent = MainFrame
+
+local GHLoadBtn = Instance.new("TextButton")
+GHLoadBtn.Size = UDim2.new(0.48, 0, 1, 0)
+GHLoadBtn.Text = "LOAD GITHUB"
+GHLoadBtn.Font = Enum.Font.GothamBold
+GHLoadBtn.BackgroundColor3 = Color3.fromRGB(150, 100, 200)
+GHLoadBtn.TextColor3 = Color3.new(1,1,1)
+GHLoadBtn.Parent = GithubSyncFrame
+local UICornerLoad = Instance.new("UICorner")
+UICornerLoad.Parent = GHLoadBtn
+
+local GHSaveBtn = Instance.new("TextButton")
+GHSaveBtn.Size = UDim2.new(0.48, 0, 1, 0)
+GHSaveBtn.Position = UDim2.new(0.52, 0, 0, 0)
+GHSaveBtn.Text = "SAVE GITHUB"
+GHSaveBtn.Font = Enum.Font.GothamBold
+GHSaveBtn.BackgroundColor3 = Color3.fromRGB(200, 150, 50)
+GHSaveBtn.TextColor3 = Color3.new(1,1,1)
+GHSaveBtn.Parent = GithubSyncFrame
+local UICornerSave = Instance.new("UICorner")
+UICornerSave.Parent = GHSaveBtn
+
+-- Dragging (Menyeret)
+local dragging = false
+local dragStart
+local startPos
+
+MainFrame.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = MainFrame.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - dragStart
+
+		MainFrame.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+end)
+
+-- Functions (Fungsi)
+local SlotUIs = {}
+
+local function GetRoot()
+	local Character = Player.Character or Player.CharacterAdded:Wait()
+	return Character:WaitForChild("HumanoidRootPart")
+end
+
+local function SaveLocation(slot)
+	local Root = GetRoot()
+
+	SavedLocations[slot] = {
+		CFrame = {Root.CFrame:components()},
+		Position = {Root.Position.X, Root.Position.Y, Root.Position.Z}
+	}
+
+	Status.Text = ("Saved Slot %d"):format(slot)
+end
+
+local function TeleportLocation(slot)
+	local Data = SavedLocations[slot]
+
+	if not Data then
+		Status.Text = ("Slot %d Empty"):format(slot)
+		return
+	end
+
+	local Character = Player.Character
+	if Character then
+		Character:PivotTo(CFrame.new(unpack(Data.CFrame)))
+	end
+
+	Status.Text = ("Teleported To Slot %d"):format(slot)
+end
+
+local function RefreshUI()
+	for i = 1, MAX_SLOTS do
+		local data = SavedLocations[i]
+		if data then
+			local Pos = data.Position
+			SlotUIs[i].Coord.Text = string.format("%.0f %.0f %.0f", Pos[1], Pos[2], Pos[3])
+			SlotUIs[i].SlotFrame.BackgroundColor3 = Color3.fromRGB(65,100,65)
+		else
+			SlotUIs[i].Coord.Text = "-"
+			SlotUIs[i].SlotFrame.BackgroundColor3 = Color3.fromRGB(55,55,55)
+		end
+	end
+end
+
+local function FetchGitHubData()
+	if not req then Status.Text = "Executor (eksekutor) tidak mendukung HTTP Request" return nil end
+	local response = req({
+		Url = "https://api.github.com/gists/" .. GIST_ID,
+		Method = "GET",
+		Headers = {
+			["Authorization"] = "token " .. GITHUB_TOKEN,
+			["Accept"] = "application/vnd.github.v3+json"
+		}
+	})
+	
+	if response.Success then
+		local decoded = HttpService:JSONDecode(response.Body)
+		if decoded.files and decoded.files["locations.json"] then
+			return HttpService:JSONDecode(decoded.files["locations.json"].content)
+		end
+	end
+	return {}
+end
+
+local function LoadFromGitHub()
+	Status.Text = "Loading from GitHub..."
+	local allData = FetchGitHubData()
+	if allData then
+		local placeData = allData[ExperienceID] or {}
+		SavedLocations = {}
+		for k, v in pairs(placeData) do
+			SavedLocations[tonumber(k)] = v
+		end
+		RefreshUI()
+		Status.Text = "Loaded data for Experience ID (ID Pengalaman): " .. ExperienceID
+	else
+		Status.Text = "Gagal memuat data dari GitHub"
+	end
+end
+
+local function SaveToGitHub()
+	if not req then Status.Text = "Executor (eksekutor) tidak mendukung HTTP Request" return end
+	Status.Text = "Saving to GitHub..."
+	
+	local allData = FetchGitHubData() or {}
+	allData[ExperienceID] = SavedLocations
+	
+	local newContent = HttpService:JSONEncode(allData)
+	
+	local response = req({
+		Url = "https://api.github.com/gists/" .. GIST_ID,
+		Method = "PATCH",
+		Headers = {
+			["Authorization"] = "token " .. GITHUB_TOKEN,
+			["Accept"] = "application/vnd.github.v3+json"
+		},
+		Body = HttpService:JSONEncode({
+			files = {
+				["locations.json"] = {
+					content = newContent
+				}
+			}
+		})
+	})
+	
+	if response.Success then
+		Status.Text = "Saved data to GitHub for Experience ID (ID Pengalaman): " .. ExperienceID
+	else
+		Status.Text = "Gagal menyimpan data ke GitHub"
+	end
+end
+
+CloseButton.MouseButton1Click:Connect(function()
+	ScreenGui:Destroy()
+end)
+
+GHLoadBtn.MouseButton1Click:Connect(LoadFromGitHub)
+GHSaveBtn.MouseButton1Click:Connect(SaveToGitHub)
+
+-- Create 21 Slots (Membuat 21 Slot)
+for i = 1, MAX_SLOTS do
+
+	local SlotFrame = Instance.new("Frame")
+	SlotFrame.BackgroundColor3 = Color3.fromRGB(55,55,55)
+	SlotFrame.Parent = Grid
+
+	local Corner = Instance.new("UICorner")
+	Corner.Parent = SlotFrame
+
+	local Label = Instance.new("TextLabel")
+	Label.Size = UDim2.new(1,0,0,20)
+	Label.BackgroundTransparency = 1
+	Label.Text = "Slot "..i
+	Label.TextColor3 = Color3.new(1,1,1)
+	Label.Font = Enum.Font.GothamBold
+	Label.Parent = SlotFrame
+
+	local Coord = Instance.new("TextLabel")
+	Coord.Size = UDim2.new(1,-4,0,20)
+	Coord.Position = UDim2.new(0,2,0,20)
+	Coord.BackgroundTransparency = 1
+	Coord.TextScaled = true
+	Coord.Text = "-"
+	Coord.TextColor3 = Color3.fromRGB(220,220,220)
+	Coord.Font = Enum.Font.Gotham
+	Coord.Parent = SlotFrame
+
+	local SaveButton = Instance.new("TextButton")
+	SaveButton.Size = UDim2.new(0.48,0,0,25)
+	SaveButton.Position = UDim2.new(0,0,1,-25)
+	SaveButton.Text = "SAVE"
+	SaveButton.Font = Enum.Font.GothamBold
+	SaveButton.BackgroundColor3 = Color3.fromRGB(70,120,255)
+	SaveButton.TextColor3 = Color3.new(1,1,1)
+	SaveButton.Parent = SlotFrame
+
+	local TPButton = Instance.new("TextButton")
+	TPButton.Size = UDim2.new(0.48,0,0,25)
+	TPButton.Position = UDim2.new(0.52,0,1,-25)
+	TPButton.Text = "TP"
+	TPButton.Font = Enum.Font.GothamBold
+	TPButton.BackgroundColor3 = Color3.fromRGB(80,180,80)
+	TPButton.TextColor3 = Color3.new(1,1,1)
+	TPButton.Parent = SlotFrame
+	
+	SlotUIs[i] = {
+		SlotFrame = SlotFrame,
+		Coord = Coord
+	}
+
+	SaveButton.MouseButton1Click:Connect(function()
+
+		SaveLocation(i)
+
+		local Pos = SavedLocations[i].Position
+
+		Coord.Text = string.format(
+			"%.0f %.0f %.0f",
+			Pos[1],
+			Pos[2],
+			Pos[3]
+		)
+
+		SlotFrame.BackgroundColor3 = Color3.fromRGB(65,100,65)
+	end)
+
+	TPButton.MouseButton1Click:Connect(function()
+		TeleportLocation(i)
+	end)
+end
