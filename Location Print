@@ -1,3 +1,4 @@
+```lua
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
@@ -8,14 +9,12 @@ local Player = Players.LocalPlayer
 local SavedLocations = {}
 local MAX_SLOTS = 21
 
--- Pengaturan GitHub (GitHub)
 local GITHUB_TOKEN = "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"
 local GIST_ID = "6895a3b15e85be0737d21df80e8e09e9"
 local ExperienceID = tostring(game.PlaceId)
 
 local req = (syn and syn.request) or request or http_request or (fluxus and fluxus.request)
 
--- GUI
 local guiParent = (gethui and gethui()) or (pcall(function() return CoreGui.Name end) and CoreGui) or Player:WaitForChild("PlayerGui")
 
 if guiParent:FindFirstChild("LocationSaver") then
@@ -32,6 +31,7 @@ MainFrame.Size = UDim2.new(0, 550, 0, 450)
 MainFrame.Position = UDim2.new(0.5, -275, 0.5, -225)
 MainFrame.BackgroundColor3 = Color3.fromRGB(35,35,35)
 MainFrame.BorderSizePixel = 0
+MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 
 local UICorner = Instance.new("UICorner")
@@ -39,11 +39,13 @@ UICorner.Parent = MainFrame
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1,0,0,35)
+Title.Position = UDim2.new(0, 10, 0, 0)
 Title.BackgroundTransparency = 1
 Title.Text = "Location Saver (21 Slots)"
 Title.TextColor3 = Color3.new(1,1,1)
 Title.TextScaled = true
 Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = MainFrame
 
 local CloseButton = Instance.new("TextButton")
@@ -58,6 +60,19 @@ CloseButton.Parent = MainFrame
 local UICornerClose = Instance.new("UICorner")
 UICornerClose.CornerRadius = UDim.new(0, 5)
 UICornerClose.Parent = CloseButton
+
+local MinimizeButton = Instance.new("TextButton")
+MinimizeButton.Size = UDim2.new(0, 30, 0, 30)
+MinimizeButton.Position = UDim2.new(1, -70, 0, 5)
+MinimizeButton.BackgroundColor3 = Color3.fromRGB(50, 150, 200)
+MinimizeButton.TextColor3 = Color3.new(1,1,1)
+MinimizeButton.Text = "-"
+MinimizeButton.Font = Enum.Font.GothamBold
+MinimizeButton.Parent = MainFrame
+
+local UICornerMin = Instance.new("UICorner")
+UICornerMin.CornerRadius = UDim.new(0, 5)
+UICornerMin.Parent = MinimizeButton
 
 local Status = Instance.new("TextLabel")
 Status.Size = UDim2.new(1,-10,0,25)
@@ -107,7 +122,6 @@ GHSaveBtn.Parent = GithubSyncFrame
 local UICornerSave = Instance.new("UICorner")
 UICornerSave.Parent = GHSaveBtn
 
--- Dragging (Menyeret)
 local dragging = false
 local dragStart
 local startPos
@@ -139,7 +153,20 @@ UIS.InputChanged:Connect(function(input)
 	end
 end)
 
--- Functions (Fungsi)
+local isMinimized = false
+MinimizeButton.MouseButton1Click:Connect(function()
+	isMinimized = not isMinimized
+	if isMinimized then
+		MainFrame.Size = UDim2.new(0, 550, 0, 40)
+	else
+		MainFrame.Size = UDim2.new(0, 550, 0, 450)
+	end
+end)
+
+CloseButton.MouseButton1Click:Connect(function()
+	ScreenGui:Destroy()
+end)
+
 local SlotUIs = {}
 
 local function GetRoot()
@@ -189,13 +216,14 @@ local function RefreshUI()
 end
 
 local function FetchGitHubData()
-	if not req then Status.Text = "Executor (eksekutor) tidak mendukung HTTP Request" return nil end
+	if not req then Status.Text = "Executor (eksekutor) tidak mendukung HTTP Request (Permintaan HTTP)" return nil end
 	local response = req({
 		Url = "https://api.github.com/gists/" .. GIST_ID,
 		Method = "GET",
 		Headers = {
 			["Authorization"] = "token " .. GITHUB_TOKEN,
-			["Accept"] = "application/vnd.github.v3+json"
+			["Accept"] = "application/vnd.github.v3+json",
+			["Content-Type"] = "application/json"
 		}
 	})
 	
@@ -204,12 +232,14 @@ local function FetchGitHubData()
 		if decoded.files and decoded.files["locations.json"] then
 			return HttpService:JSONDecode(decoded.files["locations.json"].content)
 		end
+	else
+		Status.Text = "Load Error (Galat Muat): " .. tostring(response.StatusCode)
 	end
 	return {}
 end
 
 local function LoadFromGitHub()
-	Status.Text = "Loading from GitHub..."
+	Status.Text = "Loading (Memuat) dari GitHub..."
 	local allData = FetchGitHubData()
 	if allData then
 		local placeData = allData[ExperienceID] or {}
@@ -218,15 +248,13 @@ local function LoadFromGitHub()
 			SavedLocations[tonumber(k)] = v
 		end
 		RefreshUI()
-		Status.Text = "Loaded data for Experience ID (ID Pengalaman): " .. ExperienceID
-	else
-		Status.Text = "Gagal memuat data dari GitHub"
+		Status.Text = "Loaded data for Experience ID (Data termuat untuk Identitas Pengalaman): " .. ExperienceID
 	end
 end
 
 local function SaveToGitHub()
-	if not req then Status.Text = "Executor (eksekutor) tidak mendukung HTTP Request" return end
-	Status.Text = "Saving to GitHub..."
+	if not req then Status.Text = "Executor (eksekutor) tidak mendukung HTTP Request (Permintaan HTTP)" return end
+	Status.Text = "Saving (Menyimpan) ke GitHub..."
 	
 	local allData = FetchGitHubData() or {}
 	allData[ExperienceID] = SavedLocations
@@ -238,7 +266,8 @@ local function SaveToGitHub()
 		Method = "PATCH",
 		Headers = {
 			["Authorization"] = "token " .. GITHUB_TOKEN,
-			["Accept"] = "application/vnd.github.v3+json"
+			["Accept"] = "application/vnd.github.v3+json",
+			["Content-Type"] = "application/json"
 		},
 		Body = HttpService:JSONEncode({
 			files = {
@@ -250,20 +279,15 @@ local function SaveToGitHub()
 	})
 	
 	if response.Success then
-		Status.Text = "Saved data to GitHub for Experience ID (ID Pengalaman): " .. ExperienceID
+		Status.Text = "Saved data to GitHub for Experience ID (Data tersimpan di GitHub untuk Identitas Pengalaman): " .. ExperienceID
 	else
-		Status.Text = "Gagal menyimpan data ke GitHub"
+		Status.Text = "Save Error (Galat Simpan): " .. tostring(response.StatusCode) .. " - " .. tostring(response.StatusMessage)
 	end
 end
-
-CloseButton.MouseButton1Click:Connect(function()
-	ScreenGui:Destroy()
-end)
 
 GHLoadBtn.MouseButton1Click:Connect(LoadFromGitHub)
 GHSaveBtn.MouseButton1Click:Connect(SaveToGitHub)
 
--- Create 21 Slots (Membuat 21 Slot)
 for i = 1, MAX_SLOTS do
 
 	local SlotFrame = Instance.new("Frame")
